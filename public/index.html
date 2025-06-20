@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>我的代辦事項</title>
+    <style>
+      /* --- style.css 的內容從這裡開始 --- */
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start; /* 讓內容從頂部開始 */
+        min-height: 100vh;
+        margin: 20px; /* 增加一些外邊距 */
+        box-sizing: border-box; /* 確保 padding 不會增加總寬度 */
+      }
+
+      .container {
+        background-color: #fff;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        width: 100%;
+        max-width: 500px;
+      }
+
+      h1 {
+        text-align: center;
+        color: #333;
+        margin-bottom: 25px;
+      }
+
+      #todo-form {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 25px;
+      }
+
+      #todo-input {
+        flex-grow: 1;
+        padding: 12px 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        font-size: 16px;
+        outline: none; /* 移除點擊時的藍色邊框 */
+      }
+
+      #todo-input:focus {
+        border-color: #007bff;
+      }
+
+      #todo-form button[type="submit"] {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 12px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background-color 0.3s ease;
+      }
+
+      #todo-form button[type="submit"]:hover {
+        background-color: #0056b3;
+      }
+
+      .message-area {
+        min-height: 20px; /* 預留空間防止內容跳動 */
+        margin-bottom: 15px;
+      }
+
+      .loading {
+        text-align: center;
+        color: #666;
+        font-style: italic;
+      }
+
+      .error {
+        color: #dc3545;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        padding: 10px;
+        border-radius: 5px;
+        text-align: center;
+      }
+
+      #todo-list {
+        list-style: none;
+        padding: 0;
+      }
+
+      #todo-list li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between; /* 使內容兩端對齊 */
+        background-color: #f9f9f9;
+        border: 1px solid #eee;
+        border-radius: 5px;
+        padding: 12px 15px;
+        margin-bottom: 10px;
+        transition: background-color 0.2s ease;
+      }
+
+      #todo-list li:hover {
+        background-color: #f0f0f0;
+      }
+
+      #todo-list li input[type="checkbox"] {
+        margin-right: 15px;
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+      }
+
+      .todo-title {
+        flex-grow: 1; /* 讓標題佔據剩餘空間 */
+        font-size: 17px;
+        color: #333;
+      }
+
+      #todo-list li.done .todo-title {
+        text-decoration: line-through;
+        color: #999;
+      }
+
+      .delete-btn {
+        background-color: #dc3545;
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        margin-left: 15px; /* 與標題間距 */
+        transition: background-color 0.3s ease;
+      }
+
+      .delete-btn:hover {
+        background-color: #c82333;
+      }
+      /* --- style.css 的內容在這裡結束 --- */
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>代辦事項</h1>
+
+      <form id="todo-form">
+        <input
+          type="text"
+          id="todo-input"
+          placeholder="添加新的任務..."
+          required
+        />
+        <button type="submit">添加</button>
+      </form>
+
+      <div class="message-area">
+        <div class="loading" id="loading" style="display: none">載入中...</div>
+        <div class="error" id="error" style="display: none"></div>
+      </div>
+
+      <ul id="todo-list"></ul>
+    </div>
+
+    <script>
+      /* --- index.js 的內容從這裡開始 --- */
+      const API_BASE_URL = "http://localhost:3000/api/todos";
+      const todoList = document.getElementById("todo-list");
+      const todoForm = document.getElementById("todo-form");
+      const todoInput = document.getElementById("todo-input");
+      const loadingIndicator = document.getElementById("loading");
+      const errorBox = document.getElementById("error");
+
+      // 顯示或隱藏載入提示
+      function showLoading(show) {
+        loadingIndicator.style.display = show ? "block" : "none";
+      }
+
+      // 顯示錯誤訊息
+      function showError(message) {
+        errorBox.textContent = message;
+        errorBox.style.display = message ? "block" : "none";
+      }
+
+      // 渲染單個待辦事項
+      function renderTodoItem(todo) {
+        const listItem = document.createElement("li");
+        listItem.setAttribute("data-id", todo.id);
+        listItem.classList.toggle("done", todo.done); // 添加 'done' 類別來樣式化已完成的項目
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = todo.done;
+        checkbox.addEventListener("change", () =>
+          toggleTodoDone(todo.id, checkbox.checked)
+        );
+
+        const titleSpan = document.createElement("span");
+        titleSpan.textContent = todo.title;
+        titleSpan.classList.add("todo-title"); // 添加類別以便樣式化
+
+        const deleteButton = document.createElement("button");
+        deleteButton.textContent = "刪除";
+        deleteButton.classList.add("delete-btn"); // 添加類別以便樣式化
+        deleteButton.addEventListener("click", () => deleteTodo(todo.id));
+
+        listItem.appendChild(checkbox);
+        listItem.appendChild(titleSpan);
+        listItem.appendChild(deleteButton);
+
+        return listItem;
+      }
+
+      async function fetchTodos() {
+        showLoading(true);
+        showError(""); // 清除之前的錯誤訊息
+        try {
+          const response = await fetch(API_BASE_URL);
+          if (!response.ok) {
+            throw new Error(`HTTP 錯誤! 狀態碼: ${response.status}`);
+          }
+          const todos = await response.json();
+          todoList.innerHTML = ""; // 清空現有列表
+          todos.forEach((todo) => {
+            todoList.appendChild(renderTodoItem(todo));
+          });
+        } catch (error) {
+          console.error("獲取待辦事項失敗:", error);
+          showError("載入待辦事項失敗，請稍後再試。");
+        } finally {
+          showLoading(false);
+        }
+      }
+
+      // 添加新的待辦事項
+      todoForm.addEventListener("submit", async (event) => {
+        event.preventDefault(); // 阻止表單默認提交行為
+        showError("");
+        const title = todoInput.value.trim();
+        if (!title) {
+          showError("任務標題不能為空！");
+          return;
+        }
+
+        showLoading(true);
+        try {
+          const response = await fetch(API_BASE_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ title }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(
+              errorData.error || `HTTP 錯誤! 狀態碼: ${response.status}`
+            );
+          }
+
+          const newTodo = await response.json();
+          todoList.appendChild(renderTodoItem(newTodo)); // 將新項目添加到列表中
+          todoInput.value = ""; // 清空輸入框
+        } catch (error) {
+          console.error("添加待辦事項失敗:", error);
+          showError(`添加失敗: ${error.message}`);
+        } finally {
+          showLoading(false);
+        }
+      });
+
+      async function toggleTodoDone(id, done) {
+        showError("");
+        try {
+          const response = await fetch(`${API_BASE_URL}/${id}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ done }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(
+              errorData.error || `HTTP 錯誤! 狀態碼: ${response.status}`
+            );
+          }
+
+          const updatedTodo = await response.json();
+          // 更新 DOM 中的類別來反映狀態
+          const listItem = todoList.querySelector(
+            `li[data-id="${updatedTodo.id}"]`
+          );
+          if (listItem) {
+            listItem.classList.toggle("done", updatedTodo.done);
+          }
+        } catch (error) {
+          console.error("更新待辦事項失敗:", error);
+          showError(`更新失敗: ${error.message}`);
+          // 如果更新失敗，將 checkbox 狀態恢復
+          const checkbox = todoList.querySelector(
+            `li[data-id="${id}"] input[type="checkbox"]`
+          );
+          if (checkbox) {
+            checkbox.checked = !done; // 恢復到之前的狀態
+          }
+        }
+      }
+
+      async function deleteTodo(id) {
+        showError("");
+
+        if (!confirm("確定要刪除這個任務嗎？")) {
+          return;
+        }
+
+        showLoading(true);
+        try {
+          const response = await fetch(`${API_BASE_URL}/${id}`, {
+            method: "DELETE",
+          });
+
+          if (!response.ok) {
+            // 204 No Content 通常不會有響應體，但為了穩妥起見
+            const errorText = await response.text();
+            let errorMessage = `HTTP 錯誤! 狀態碼: ${response.status}`;
+            try {
+              const errorData = JSON.parse(errorText);
+              errorMessage = errorData.err || errorData.error || errorMessage;
+            } catch (e) {
+              if (errorText) errorMessage += ` - ${errorText}`;
+            }
+            throw new Error(errorMessage);
+          }
+
+          const listItem = todoList.querySelector(`li[data-id="${id}"]`);
+          if (listItem) {
+            listItem.remove();
+          }
+        } catch (error) {
+          console.error("刪除待辦事項失敗:", error);
+          showError(`刪除失敗: ${error.message}`);
+        } finally {
+          showLoading(false);
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", fetchTodos);
+    </script>
+  </body>
+</html>
