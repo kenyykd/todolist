@@ -25,7 +25,7 @@
 
 - **後端**: Node.js, Express.js
 - **資料庫**: Supabase (PostgreSQL)
-- **雲端平台**: AWS EC2 (Amazon Linux)
+- **雲端平台**: AWS EC2 
 - **程序管理**: PM2
 - **版本控制**: Git & GitHub
 
